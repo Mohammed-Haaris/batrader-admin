@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, X } from "lucide-react";
 import { productAPI } from "../services/api";
 import type { ProductFormData } from "../types/product";
 
@@ -157,23 +157,23 @@ const AddProduct = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto pb-10">
+    <div className="max-w-4xl mx-auto pb-10 px-0 sm:px-4">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8 px-4 sm:px-0">
         <button
           onClick={() => navigate("/products")}
           className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold mb-4 transition-all"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back to Products
+          <span className="text-sm sm:text-base">Back to Products</span>
         </button>
-        <h2 className="text-3xl font-bold text-gray-800">Add New Product</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-800">Add New Product</h2>
       </div>
 
       {/* Form */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white rounded-xl shadow-lg p-8"
+        className="bg-white sm:rounded-2xl shadow-xl p-4 sm:p-8 border border-gray-100"
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* LEFT COLUMN: Main Info */}
@@ -354,60 +354,63 @@ const AddProduct = () => {
                     <button
                       type="button"
                       onClick={() => removeVariant(index)}
-                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                      className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                       title="Remove Variant"
                     >
-                      <Save className="w-4 h-4 rotate-45" /> {/* Using Save icon rotated as X for simplicity since X is not imported, or replace icon */}
+                      <X className="w-4 h-4" />
                     </button>
                     
-                    <div className="grid grid-cols-12 gap-3 items-end">
-                       <div className="col-span-5">
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Variant Name</label>
-                          <input 
-                             placeholder="e.g. 1 kg, XL, Pack of 2"
-                             value={variant.variant_name}
-                             onChange={(e) => handleVariantChange(index, "variant_name", e.target.value)}
-                             className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none font-medium"
-                          />
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+                       <div className="sm:col-span-11 grid grid-cols-2 sm:grid-cols-11 gap-3">
+                          <div className="col-span-2 sm:col-span-5">
+                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Variant Name</label>
+                             <input 
+                                placeholder="e.g. 1 kg, Pack of 2"
+                                value={variant.variant_name}
+                                onChange={(e) => handleVariantChange(index, "variant_name", e.target.value)}
+                                className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none font-medium bg-white"
+                             />
+                          </div>
+                          <div className="col-span-1 sm:col-span-2">
+                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Price (₹)</label>
+                             <input 
+                                type="number"
+                                placeholder="0"
+                                value={variant.price}
+                                onChange={(e) => handleVariantChange(index, "price", e.target.value)}
+                                className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none bg-white"
+                             />
+                          </div>
+                          <div className="col-span-1 sm:col-span-2">
+                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Stock</label>
+                             <input 
+                                type="number"
+                                placeholder="0"
+                                value={variant.stock}
+                                onChange={(e) => handleVariantChange(index, "stock", e.target.value)}
+                                className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none bg-white"
+                             />
+                          </div>
+                          <div className="col-span-2 sm:col-span-2">
+                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Ship (₹)</label>
+                             <input 
+                                type="number"
+                                placeholder="0"
+                                value={variant.shipping_rate}
+                                onChange={(e) => handleVariantChange(index, "shipping_rate", e.target.value)}
+                                className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none bg-white"
+                             />
+                          </div>
                        </div>
-                       <div className="col-span-3">
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Price (₹)</label>
-                          <input 
-                             type="number"
-                             placeholder="0"
-                             value={variant.price}
-                             onChange={(e) => handleVariantChange(index, "price", e.target.value)}
-                             className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none"
-                          />
-                       </div>
-                       <div className="col-span-3">
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Stock</label>
-                          <input 
-                             type="number"
-                             placeholder="0"
-                             value={variant.stock}
-                             onChange={(e) => handleVariantChange(index, "stock", e.target.value)}
-                             className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none"
-                          />
-                       </div>
-                       <div className="col-span-3">
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Shipping (₹)</label>
-                          <input 
-                             type="number"
-                             placeholder="0"
-                             value={variant.shipping_rate}
-                             onChange={(e) => handleVariantChange(index, "shipping_rate", e.target.value)}
-                             className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 outline-none"
-                          />
-                       </div>
-                       <div className="col-span-1 flex justify-center pb-2">
+                       
+                       <div className="sm:col-span-1 flex flex-col items-center justify-center pb-1">
+                          <label className="sm:hidden block text-[10px] font-bold text-gray-400 uppercase mb-2">Default</label>
                           <input 
                             type="radio" 
                             name="default_variant"
                             checked={variant.is_default}
                             onChange={() => {
                               const newV = [...(formData.variants || [])].map((v, i) => ({...v, is_default: i === index}));
-                              // Update base price and stock from the newly selected default variant
                               setFormData(prev => ({
                                 ...prev, 
                                 price: variant.price,
@@ -415,8 +418,8 @@ const AddProduct = () => {
                                 variants: newV
                               }));
                             }}
-                            className="w-4 h-4 cursor-pointer text-indigo-600 focus:ring-indigo-500"
-                            title="Set as Default (Syncs with Base Price)"
+                            className="w-5 h-5 cursor-pointer text-indigo-600 focus:ring-indigo-500 border-gray-300 shadow-sm"
+                            title="Set as Default"
                           />
                        </div>
                     </div>
