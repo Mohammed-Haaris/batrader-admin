@@ -118,6 +118,8 @@ const EditProduct = () => {
     const newVariants = [...(formData.variants || [])];
     // @ts-ignore
     newVariants[index][field] = value;
+
+    
     
     // Auto-sync with base pricing if this is the default variant
     if (newVariants[index].is_default) {
@@ -189,7 +191,8 @@ const EditProduct = () => {
       }
 
       // Append variants as JSON string
-      if (formData.variants && formData.variants.length > 0) {
+      // Append variants as JSON string
+      if (formData.variants) {
         data.append("variants", JSON.stringify(formData.variants));
       }
 
