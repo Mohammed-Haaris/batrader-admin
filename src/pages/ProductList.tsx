@@ -188,9 +188,16 @@ const ProductList = () => {
                 </p>
 
                 <div className="mb-4 pb-4 border-b border-gray-100">
-                  <p className="text-xl sm:text-2xl font-bold text-indigo-600">
-                    ₹{product.price.toLocaleString()}
-                  </p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-xl sm:text-2xl font-bold text-indigo-600">
+                      ₹{product.price.toLocaleString()}
+                    </p>
+                    {product.mrp && Number(product.mrp) > Number(product.price) && (
+                      <span className="text-xs sm:text-sm text-gray-400 line-through">
+                        ₹{Number(product.mrp).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
                     <p className="text-[10px] sm:text-xs text-gray-500">
                       Stock: <span className={`font-semibold ${product.stock > 10 ? 'text-green-600' : 'text-orange-600'}`}>{product.stock}</span>
