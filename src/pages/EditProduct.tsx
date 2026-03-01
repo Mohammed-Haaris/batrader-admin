@@ -16,9 +16,11 @@ const EditProduct = () => {
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
     description: "",
+    mrp: "",
     price: "",
     stock: "",
     image: "",
+    images: [],
     category: "",
     brand: "",
     shipping_rate: "0",
@@ -26,6 +28,7 @@ const EditProduct = () => {
   });
 
   const [preview, setPreview] = useState<string>("");
+  const [multiPreviews, setMultiPreviews] = useState<string[]>([]);
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -58,6 +61,7 @@ const EditProduct = () => {
       setFormData({
         name: product.name,
         description: product.description,
+        mrp: (product.mrp || "").toString(),
         price: product.price.toString(),
         stock: product.stock.toString(),
         image: product.image,
@@ -67,13 +71,17 @@ const EditProduct = () => {
         // Map variants to string format for inputs
         variants: product.variants?.map(v => ({
            variant_name: v.variant_name,
+           mrp: (v.mrp || "").toString(),
            price: v.price.toString(),
            stock: v.stock.toString(),
            shipping_rate: (v.shipping_rate || 0).toString(),
-           is_default: v.is_default
-        })) || []
+           is_default: v.is_default,
+           image: v.image
+        })) || [],
+        images: product.images || []
       });
       if (product.image) setPreview(product.image);
+      if (product.images) setMultiPreviews(product.images);
     } catch (error) {
       console.error("Error fetching product:", error);
       alert("Failed to fetch product");
@@ -96,10 +104,19 @@ const EditProduct = () => {
     >
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      const newState = { ...prev, [name]: value };
+      
+      // If we have only 1 variant (or it's the "Standard" one), keep it in sync with base pricing
+      if (prev.variants && prev.variants.length === 1 && ["price", "mrp", "stock", "shipping_rate"].includes(name)) {
+        const newVariants = [...prev.variants];
+        // @ts-ignore
+        newVariants[0][name] = value;
+        newState.variants = newVariants;
+      }
+      
+      return newState;
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,6 +130,30 @@ const EditProduct = () => {
     }
   };
 
+  const handleMultiFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setFormData((prev) => ({
+        ...prev,
+        images: [...prev.images, ...files],
+      }));
+      
+      const newPreviews = files.map(file => URL.createObjectURL(file));
+      setMultiPreviews(prev => [...prev, ...newPreviews]);
+    }
+  };
+
+  const removeMultiImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+    setMultiPreviews(prev => prev.filter((_, i) => i !== index));
+
+    // If it's an existing image (string URL), we might need to tell backend to delete it
+    // For now, we'll just not send it back in the images array.
+  };
+
   // Variant handlers
   const handleVariantChange = (index: number, field: string, value: string | boolean) => {
     const newVariants = [...(formData.variants || [])];
@@ -123,6 +164,10 @@ const EditProduct = () => {
     
     // Auto-sync with base pricing if this is the default variant
     if (newVariants[index].is_default) {
+        if (field === "mrp") {
+            setFormData(prev => ({ ...prev, mrp: value as string, variants: newVariants }));
+            return;
+        }
         if (field === "price") {
             setFormData(prev => ({ ...prev, price: value as string, variants: newVariants }));
             return;
@@ -136,6 +181,15 @@ const EditProduct = () => {
     setFormData((prev) => ({ ...prev, variants: newVariants }));
   };
 
+  const handleVariantFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const newVariants = [...(formData.variants || [])];
+      newVariants[index].image = file;
+      setFormData(prev => ({ ...prev, variants: newVariants }));
+    }
+  };
+
   const addVariant = () => {
     setFormData((prev) => ({
       ...prev,
@@ -143,9 +197,10 @@ const EditProduct = () => {
         ...(prev.variants || []),
         {
           variant_name: "",
-          price: "",
-          stock: "",
-          shipping_rate: "0",
+          mrp: prev.mrp || "",
+          price: prev.price || "",
+          stock: prev.stock || "",
+          shipping_rate: prev.shipping_rate || "0",
           is_default: prev.variants?.length === 0, // First one is default
         },
       ],
@@ -178,6 +233,7 @@ const EditProduct = () => {
       const data = new FormData();
       data.append("name", formData.name);
       data.append("description", formData.description);
+      data.append("mrp", formData.mrp || "");
       data.append("price", formData.price);
       data.append("stock", formData.stock);
       data.append("category", formData.category);
@@ -190,10 +246,30 @@ const EditProduct = () => {
         data.append("image", formData.image);
       }
 
+      // Handle multiple images
+      formData.images.forEach((img) => {
+        if (img instanceof File) {
+          data.append("images", img);
+        } else {
+          // If it's the existing URL, we append it so the backend knows to keep it
+          data.append("images", img);
+        }
+      });
+
       // Append variants as JSON string
-      // Append variants as JSON string
-      if (formData.variants) {
-        data.append("variants", JSON.stringify(formData.variants));
+      if (formData.variants && formData.variants.length > 0) {
+        let variantImageCounter = 0;
+        const processedVariants = formData.variants.map((v) => {
+            const variantCopy = { ...v };
+            if (v.image instanceof File) {
+                data.append("variant_images", v.image);
+                // @ts-ignore
+                variantCopy.image = `file:${variantImageCounter}`;
+                variantImageCounter++;
+            }
+            return variantCopy;
+        });
+        data.append("variants", JSON.stringify(processedVariants));
       }
 
       await productAPI.updateProduct(parseInt(id!), data);
@@ -306,10 +382,10 @@ const EditProduct = () => {
                     />
                 </div>
                 
-                {/* Image Upload */}
+                {/* Main Image Upload */}
                 <div>
                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                   Product Image
+                   Main Product Image
                    </label>
                    <input
                    type="file"
@@ -320,11 +396,11 @@ const EditProduct = () => {
                    />
                    {preview && (
                    <div className="mt-4">
-                       <p className="text-sm text-gray-600 mb-2">Image Preview:</p>
+                       <p className="text-sm text-gray-600 mb-2">Primary Preview:</p>
                        <img
                        src={preview}
                        alt="Preview"
-                       className="w-full max-w-xs h-48 object-cover rounded-lg border border-gray-200"
+                       className="w-full max-w-xs h-40 object-cover rounded-lg border border-gray-200"
                        onError={(e) => {
                            (e.target as HTMLImageElement).src =
                            "https://via.placeholder.com/400";
@@ -332,6 +408,48 @@ const EditProduct = () => {
                        />
                    </div>
                    )}
+                </div>
+
+                {/* Multiple Images Upload */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Gallery Images (Optional)
+                  </label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-indigo-400 transition-colors cursor-pointer relative bg-gray-50/30">
+                    <div className="space-y-1 text-center">
+                      <svg className="mx-auto h-10 w-10 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <div className="flex text-sm text-gray-600 justify-center">
+                        <label htmlFor="multi-image-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none">
+                          <span>Add more images</span>
+                          <input id="multi-image-upload" name="images" type="file" className="sr-only" multiple accept="image/*" onChange={handleMultiFileChange} />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {multiPreviews.length > 0 && (
+                    <div className="mt-4 grid grid-cols-4 gap-2">
+                      {multiPreviews.map((src, idx) => (
+                        <div key={idx} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200">
+                          <img
+                            src={src}
+                            alt={`Preview ${idx}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/400"; }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeMultiImage(idx)}
+                            className="absolute -top-px -right-px p-1 bg-red-500 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Display Price & Stock */}
@@ -342,17 +460,32 @@ const EditProduct = () => {
                             <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase">Synced with Default Variant</span>
                         )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                     <div className="grid grid-cols-2 gap-4">
                          <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">Price (₹)</label>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">MRP (₹) <span className="text-[10px] italic">(Struck out)</span></label>
+                        <input
+                            type="number"
+                            name="mrp"
+                            value={formData.mrp}
+                            onChange={handleChange}
+                            disabled={formData.variants && formData.variants.length > 1}
+                            className={`w-full p-2 rounded border border-gray-300 outline-none transition-all ${
+                                formData.variants && formData.variants.length > 1 
+                                ? "bg-gray-100 cursor-not-allowed opacity-75" 
+                                : "focus:ring-2 focus:ring-indigo-200"
+                            }`}
+                        />
+                        </div>
+                         <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Selling Price (₹)</label>
                         <input
                             type="number"
                             name="price"
                             value={formData.price}
                             onChange={handleChange}
-                            disabled={formData.variants && formData.variants.length > 0}
+                            disabled={formData.variants && formData.variants.length > 1}
                             className={`w-full p-2 rounded border border-gray-300 outline-none transition-all ${
-                                formData.variants && formData.variants.length > 0 
+                                formData.variants && formData.variants.length > 1 
                                 ? "bg-gray-100 cursor-not-allowed opacity-75" 
                                 : "focus:ring-2 focus:ring-indigo-200"
                             }`}
@@ -365,9 +498,9 @@ const EditProduct = () => {
                             name="stock"
                             value={formData.stock}
                             onChange={handleChange}
-                            disabled={formData.variants && formData.variants.length > 0}
+                            disabled={formData.variants && formData.variants.length > 1}
                             className={`w-full p-2 rounded border border-gray-300 outline-none transition-all ${
-                                formData.variants && formData.variants.length > 0 
+                                formData.variants && formData.variants.length > 1 
                                 ? "bg-gray-100 cursor-not-allowed opacity-75" 
                                 : "focus:ring-2 focus:ring-indigo-200"
                             }`}
@@ -401,7 +534,7 @@ const EditProduct = () => {
                     </button>
                  </div>
                  
-                 {(!formData.variants || formData.variants.length === 0) && (
+                 {(!formData.variants || formData.variants.length === 0 || (formData.variants.length === 1 && (formData.variants[0].variant_name === "" || formData.variants[0].variant_name === "Default" || formData.variants[0].variant_name === "Standard"))) && (
                    <div className="p-8 text-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                      <p className="text-gray-500 text-sm">No variants added yet.</p>
                      <p className="text-xs text-gray-400 mt-1">This product will be sold as a single item using the Base Price.</p>
@@ -416,8 +549,16 @@ const EditProduct = () => {
                  )}
 
                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                   {formData.variants?.map((variant, index) => (
-                     <div key={index} className="p-4 bg-gray-50/50 border border-gray-200 rounded-xl relative group hover:border-indigo-200 transition-colors">
+                   {formData.variants?.map((variant, index) => {
+                      // Hide the 'Internal Default' variant card if it's the only one
+                      // and it has a generic name, but show it if it has a custom name or if there are multiple variants
+                      const isInternalDefault = formData.variants!.length === 1 && 
+                        (variant.variant_name === "" || variant.variant_name === "Default" || variant.variant_name === "Standard");
+                      
+                      if (isInternalDefault) return null;
+
+                      return (
+                        <div key={index} className="p-4 bg-gray-50/50 border border-gray-200 rounded-xl relative group hover:border-indigo-200 transition-colors">
                         <button
                           type="button"
                           onClick={() => removeVariant(index)}
@@ -438,6 +579,16 @@ const EditProduct = () => {
                                     className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none font-medium bg-white"
                                  />
                               </div>
+                               <div className="col-span-1 sm:col-span-2">
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">MRP (₹)</label>
+                                 <input 
+                                    type="number"
+                                    placeholder="0"
+                                    value={variant.mrp}
+                                    onChange={(e) => handleVariantChange(index, "mrp", e.target.value)}
+                                    className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none bg-white font-medium text-gray-400 line-through"
+                                 />
+                              </div>
                               <div className="col-span-1 sm:col-span-2">
                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Price (₹)</label>
                                  <input 
@@ -445,7 +596,7 @@ const EditProduct = () => {
                                     placeholder="0"
                                     value={variant.price}
                                     onChange={(e) => handleVariantChange(index, "price", e.target.value)}
-                                    className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none bg-white"
+                                    className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none bg-white font-bold text-indigo-700"
                                  />
                               </div>
                               <div className="col-span-1 sm:col-span-2">
@@ -469,6 +620,28 @@ const EditProduct = () => {
                                  />
                               </div>
                            </div>
+
+                           {/* Variant Image */}
+                           <div className="sm:col-span-11 mt-3 flex items-center gap-4 border-t pt-3">
+                              <div className="flex-1">
+                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Variant Image (Optional)</label>
+                                 <input 
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleVariantFileChange(index, e)}
+                                    className="w-full text-xs file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                 />
+                              </div>
+                              {variant.image && (
+                                 <div className="w-12 h-12 rounded border overflow-hidden shrink-0">
+                                    <img 
+                                       src={variant.image instanceof File ? URL.createObjectURL(variant.image) : (variant.image as string)} 
+                                       alt="Variant Preview" 
+                                       className="w-full h-full object-cover"
+                                    />
+                                 </div>
+                              )}
+                           </div>
                            
                            <div className="sm:col-span-1 flex flex-col items-center justify-center pb-1">
                               <label className="sm:hidden block text-[10px] font-bold text-gray-400 uppercase mb-2">Default</label>
@@ -478,8 +651,9 @@ const EditProduct = () => {
                                 checked={variant.is_default}
                                 onChange={() => {
                                   const newV = [...(formData.variants || [])].map((v, i) => ({...v, is_default: i === index}));
-                                  setFormData(prev => ({
+                                   setFormData(prev => ({
                                     ...prev, 
+                                    mrp: variant.mrp,
                                     price: variant.price,
                                     stock: variant.stock,
                                     variants: newV
@@ -491,7 +665,8 @@ const EditProduct = () => {
                            </div>
                         </div>
                      </div>
-                   ))}
+                      );
+                    })}
                  </div>
               </div>
         </div>
